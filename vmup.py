@@ -100,7 +100,8 @@ Commands:
     down <name> - bring down VM
     add <name> - create new VM
     del <name> - delete VM and all its data
-    daemon <name> - run VM without forking''')
+    daemon <name> - run VM without forking
+    fixhostname <name> - fixes /etc/hostname of VM''')
 
 def accept_noarg(func):
     def wrapper(profile, arg=None):
@@ -129,13 +130,27 @@ def cmdline_add(profile, name):
 def cmdline_dhcpd(profile, choose_name=None):
     path = prepare_profile(profile)
     tpl = 'host %(name)s {\n\thardware ethernet %(mac)s;\n\tfixed-address %(ip)s;\n}'
+
+    for name, description in get_vms(path):
+        if choose_name is None or name == choose_name:
+            ip = get_ip(path, description['number'])
+            print tpl % {'ip': ip, 'mac': description['mac'], 'name': name}
+
+def get_ip(path, number):
     first_ip = profile_get(path, 'first_ip')
     first_ip_a, first_ip_b = first_ip.rsplit('.', 1)
     first_ip_b = int(first_ip_b)
-    for name, description in get_vms(path):
-        if choose_name is None or name == choose_name:
-            ip = '%s.%d' % (first_ip_a, first_ip_b + description['number'])
-            print tpl % {'ip': ip, 'mac': description['mac'], 'name': name}
+    ip = '%s.%d' % (first_ip_a, first_ip_b + number)
+    return ip
+
+@accept_noarg
+def cmdline_fixhostname(profile, name):
+    path = prepare_profile(profile)
+    data = json.load(open(path + '/' + name + '.json'))
+    ip = get_ip(path, data['number'])
+    print name
+    call(['ssh', ip, '-l', 'root', '-o', 'StrictHostKeyChecking=no',
+          'sh', '-c', 'echo %s > /etc/hostname; reboot' % name])
 
 def cmdline_del(profile, name, really=None):
     path = prepare_profile(profile)
@@ -258,7 +273,7 @@ def prepare_profile(name):
         with open(path + '/profile', 'w') as f:
             f.write('{}')
         profile_set(path, 'counter', 0)
-        profile_set(path, 'firstip', '192.168.16.70')
+        profile_set(path, 'first_ip', '192.168.16.70')
     return path
 
 def profile_get(path, name, default=None):
