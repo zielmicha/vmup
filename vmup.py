@@ -185,6 +185,8 @@ def cmdline_up(profile, name):
         os.setsid()
         if os.fork() == 0:
             run_daemon(vm)
+        else:
+            os._exit(0)
 
 @accept_noarg
 def cmdline_down(profile, name):
